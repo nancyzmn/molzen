@@ -1,10 +1,96 @@
 import numpy as np
-from typing import Callable, Optional
+from typing import List, Optional
 
 from molzen.amino_acids import aa2long, aa2num, oneletter_code, ncaas, num2aa, aa_1_to_3
 from molzen.ptable import ALL_SYMBOLS
+from pathlib import Path
 
+def parse_amber_rst7(path_rst7) -> List[List[float]]:
+    """
+    Parse an ASCII AMBER restart (.rst7) file.
+    
+    Args:
+        path_rst7 (str): Path to the .rst7 file.
+        
+    Notes
+    -----
+    Format (common ASCII rst7):
+    line 1: title/comment
+    line 2: NATOM [time]
+    then: 3*NATOM floats for coordinates (x,y,z per atom)
 
+    Returns
+    -------
+    coords : np.ndarray
+        Shape (N, 3). Coordinates in Angstrom.
+
+    """
+    path = Path(path_rst7)
+    lines = path.read_text().splitlines()
+    if len(lines) < 2:
+        raise ValueError(f"{path}: too few lines to be a valid rst7.")
+
+    header = lines[1].split()
+    if not header:
+        raise ValueError(f"{path}: cannot parse NATOM from line 2.")
+    natom = int(header[0])
+
+    # Flatten all numeric tokens after line 2 (coords + optional vels + optional box)
+    tokens: List[str] = []
+    for line in lines[2:]:
+        tokens.extend(line.split())
+
+    ncoord = 3 * natom
+    if len(tokens) < ncoord:
+        raise ValueError(
+            f"{path}: not enough numeric values for coordinates: "
+            f"got {len(tokens)}, need at least {ncoord}."
+        )
+
+    coord_vals = list(map(float, tokens[:ncoord]))
+    coords = [coord_vals[i:i + 3] for i in range(0, ncoord, 3)]
+
+    return np.array(coords)
+
+def write_amber_rst7(
+    coords: np.ndarray,
+    out_path: str,
+    title: str = "Created by write_amber_rst7"
+) -> None:
+    """
+    Write an ASCII AMBER restart (rst7) file from an (N, 3) coordinate array.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Shape (N, 3). Coordinates in Angstrom.
+    out_path : str
+        Output .rst7 file path.
+    title : str
+        First-line title.
+
+    Notes
+    -----
+    - Writes coordinates only (no velocities, no box).
+    - Uses 12.7f formatting and 6 floats per line (two atoms per line).
+    """
+    coords = np.asarray(coords, dtype=float)
+    if coords.ndim != 2 or coords.shape[1] != 3:
+        raise ValueError(f"coords must have shape (N, 3); got {coords.shape}")
+
+    natom = coords.shape[0]
+    out_path = Path(out_path)
+
+    flat = coords.reshape(-1)
+
+    with out_path.open("w") as f:
+        f.write(f"{title}\n")
+        f.write(f"{natom:5d}\n")
+
+        for i in range(0, len(flat), 6):
+            chunk = flat[i:i + 6]
+            f.write("".join(f"{v:12.7f}" for v in chunk) + "\n")
+            
 def parse_xyz(xyz_fp):
     """Parse a .xyz with potentially multiple frames in it.
 
