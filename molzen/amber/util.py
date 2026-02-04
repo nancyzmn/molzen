@@ -5,7 +5,33 @@ import tempfile
 import numpy as np
 import pytraj as pt
 
+def get_constraint_index_for_TC(
+    prmtop: str,
+    rst7: str,
+    amber_mask: str,
+    output_path:str
+):
+    """
+    This function is used to get atom indexes for constraints in TeraChem input file.
 
+    Parameters
+    ----------
+    prmtop : str
+        Path to the AMBER topology file (.prmtop).
+    rst7 : str
+        Path to the AMBER restart/coordinates file (.rst7 / .inpcrd) to load.
+        Only the first frame is used to set a reference.
+    amber_mask : str
+        Amber mask expression used to select atoms (e.g., ":1 < :6", which means selecting residues within 6Å of resid 1, resid 1 included).
+
+    output_path : str
+        Output path for the index file. One integer per line (1-indexed, following TC constraints definition).
+    """
+    traj = pt.load(rst7, top = prmtop)
+    traj.top.set_reference(traj[0])
+    frozen = traj.top.select(f'({amber_mask})')
+    np.savetxt(output_path,frozen + 1,fmt='%i')
+    
 def make_spherical_water_droplet(
     prmtop,
     rst7,
