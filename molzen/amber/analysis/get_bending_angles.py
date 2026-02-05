@@ -2,8 +2,8 @@ import pytraj as pt
 import numpy as np
 
 def get_bending_angles(
-    traj_path: str,
     topfile: str,
+    traj_path: str,
     mask1: str,
     mask2: str,
     mask3: str
